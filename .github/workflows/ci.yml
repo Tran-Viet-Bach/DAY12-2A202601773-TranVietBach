@@ -70,9 +70,12 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy
+        # Account token đọc qua RAILWAY_API_TOKEN (project token thì dùng
+        # RAILWAY_TOKEN). Account token không gắn với project nào nên phải chỉ
+        # rõ --project và --environment, runner không có sẵn liên kết local.
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service agent --ci
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: railway up --service agent --environment production --project 525ff13a-4743-492e-976a-889ee302222d --ci
 
       - name: Smoke test bản vừa deploy
         env:
