@@ -10,17 +10,22 @@
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo DAY12-...) |
+| Họ và tên | Trần Việt Bách |
+| Mã học viên | 2A202601773 |
+| Repo | https://github.com/Tran-Viet-Bach/DAY12-2A202601773-TranVietBach |
 
 ## Service
 
 | Mục | Nội dung |
 |-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| Public URL | https://agent-production-ce57.up.railway.app |
+| Platform | Railway |
+| Ngày deploy | 2026-08-10 |
+
+Kiến trúc trên Railway: service `agent` (build từ `Dockerfile`, multi-stage,
+chạy bằng user thường `appuser`) + database `Redis` gắn volume `redis-volume`.
+Hai service nói chuyện qua mạng nội bộ `redis.railway.internal`, không phơi
+Redis ra Internet.
 
 ## Biến Môi Trường Đã Set Trên Cloud
 
@@ -30,7 +35,7 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 |------|--------|---------|
 | `PORT` | ✅ | platform tự gán |
 | `AGENT_API_KEY` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
+| `REDIS_URL` | ✅ | Redis add-on của Railway, tham chiếu `Redis.REDIS_URL` |
 | `RATE_LIMIT_PER_MINUTE` | ✅ | 10 |
 | `MONTHLY_BUDGET_USD` | ✅ | 10.0 |
 | `LOG_LEVEL` | ✅ | INFO |
@@ -70,32 +75,60 @@ done; echo
 
 ## Kết Quả Chạy Thật
 
-Dán output của các lệnh trên vào đây:
+Chạy ngày 2026-08-10 với `<URL> = https://agent-production-ce57.up.railway.app`
 
 ```
-(điền output)
+### 1. GET /health
+{"status":"ok","service":"day12-agent","version":"1.0.0"}
+[HTTP 200]
+
+### 2. GET /ready
+{"status":"ready","redis":true}
+[HTTP 200]
+
+### 3. POST /ask  (không có API key)
+{"detail":"invalid or missing API key"}
+[HTTP 401]
+
+### 4. POST /ask  (có API key)
+{"answer":"Theo mình hiểu, Docker la gi liên quan tới cách hệ thống được đóng
+gói và vận hành. Điểm mấu chốt là tách cấu hình ra khỏi code và giữ service ở
+trạng thái stateless.","user_id":"sv-bach","history_length":0,
+"cost_usd":2.505e-05,"tokens":{"in":3,"out":41}}
+[HTTP 200]
+
+### 5. Rate limit — 15 lần gọi liên tiếp
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
 ```
+
+Đúng 10 lần đầu qua, 5 lần sau bị chặn — khớp với `RATE_LIMIT_PER_MINUTE=10`.
+
+### Bằng chứng stateless (CP4)
+
+Gọi `/ask` lần thứ hai với cùng `X-User-Id`, lịch sử được đọc lại từ Redis
+chứ không nằm trong RAM của process:
+
+```
+{"answer":"Với Con Kubernetes, cách làm phổ biến trong production là đặt một
+lớp gateway phía trước để lo authentication, rate limiting và bảo vệ chi phí.
+(Mình đang nhớ 2 lượt trao đổi trước đó.)","user_id":"sv-bach",
+"history_length":2,"cost_usd":3.48e-05,"tokens":{"in":48,"out":46}}
+[HTTP 200]
+```
+
+`history_length` tăng 0 → 2, và `tokens.in` tăng 3 → 48 vì lịch sử được nạp
+vào prompt. Đây cũng là lý do `ConversationStore.append` phải `ltrim` giới hạn
+20 message: không giới hạn thì prompt và tiền token phình vô hạn.
 
 ## Ảnh Chụp Màn Hình
 
-Đặt ảnh trong thư mục `screenshots/`:
+### Dashboard Railway — hai service cùng Online
 
-- `screenshots/dashboard.png` — trang quản lý service trên platform
-- `screenshots/health.png` — kết quả gọi `/health` từ trình duyệt hoặc curl
+![Dashboard Railway](screenshots/dashboard.png)
 
----
+Project `lab12deployed`, môi trường `production`: service `agent` và database
+`Redis` (kèm volume `redis-volume`) đều ở trạng thái Online.
 
-## Nếu Dùng Phương Án Dự Phòng
+### Gọi `/health` trên URL công khai
 
-Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
-
-1. Đặt `LOCAL_FALLBACK=true` trong `.env`
-2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
-3. Chụp màn hình vào `screenshots/`
-4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
-   `http://localhost:8000`
-5. Ghi rõ lý do không deploy được vào phần dưới đây:
-
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+![Kết quả gọi /health](screenshots/health.png)
